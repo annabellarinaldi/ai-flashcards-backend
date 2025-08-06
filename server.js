@@ -2,12 +2,24 @@ require('dotenv').config()
 
 const express = require('express')
 const mongoose = require('mongoose')
+const cors = require('cors')
 const flashcardRoutes = require('./routes/flashcards')
 const userRoutes = require('./routes/user')
 const documentRoutes = require('./routes/documents')
 
 // express app
 const app = express()
+
+//CORS configuration
+app.use(cors({
+    origin: [
+        'https://ai-flashcards-self.vercel.app', // Replace with your actual Vercel URL
+        'http://localhost:3000' // For local development
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}))
 
 // middleware
 app.use(express.json({ limit: '10mb' }))
