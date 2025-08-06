@@ -13,8 +13,9 @@ const app = express()
 //CORS configuration
 app.use(cors({
     origin: [
-        'https://ai-flashcards-self.vercel.app', // Replace with your actual Vercel URL
-        'http://localhost:3000' // For local development
+        'https://ai-flashcards-git-main-annabellarinaldis-projects.vercel.app',
+        'https://ai-flashcards-ip5xgbee4-annabellarinaldis-projects.vercel.app',
+        'http://localhost:3000'
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
