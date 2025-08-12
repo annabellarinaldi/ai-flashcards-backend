@@ -1,6 +1,8 @@
 const Flashcard = require('../models/flashcardModel')
 const mongoose = require('mongoose')
 const { updateFlashcard: updateFlashcardSRS, getDueFlashcards, getDueCount } = require('../utils/srsAlgorithm')
+const { scoreResponse } = require('../services/aiScoringService')
+
 // get all flashcards
 const getFlashcards = async (req, res) => {
     console.log("🚀 GET ALL FLASHCARDS REQUEST RECEIVED!")
@@ -233,7 +235,87 @@ const submitTypedReview = async (req, res) => {
     }
 }
 
-// NEW: Allow manual quality override after seeing result
+// submit typed answer for AI scoring
+const submitTypedReviewWithAI = async (req, res) => {
+    try {
+        const { id } = req.params
+        const { userAnswer } = req.body
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(404).json({ error: 'Invalid flashcard ID' })
+        }
+
+        if (userAnswer === undefined || userAnswer === null) {
+            return res.status(400).json({ 
+                error: 'Answer is required' 
+            })
+        }
+
+        const flashcard = await Flashcard.findById(id)
+        if (!flashcard) {
+            return res.status(404).json({ error: 'Flashcard not found' })
+        }
+
+        // Determine question and correct answer based on review type
+        const question = flashcard.reviewType === 'recognition' ? flashcard.term : flashcard.definition
+        const correctAnswer = flashcard.reviewType === 'recognition' ? flashcard.definition : flashcard.term
+
+        // Get AI scoring
+        const aiScore = await scoreResponse(
+            question,
+            correctAnswer,
+            userAnswer.trim(),
+            flashcard.reviewType
+        )
+
+        // Update performance tracking
+        flashcard.totalReviews += 1
+        if (aiScore.isCorrect) {
+            flashcard.correctAnswers += 1
+        }
+        
+        await flashcard.save()
+
+        // Update SRS scheduling with AI-determined quality
+        const updatedFlashcard = await updateFlashcardSRS(id, aiScore.quality)
+        
+        // Get next card for the session
+        const user_id = req.user._id
+        const remainingCards = await getDueFlashcards(user_id)
+        
+        // Filter out the card we just reviewed to avoid immediate repetition
+        const nextCards = remainingCards.filter(card => card._id.toString() !== id)
+        
+        // Return detailed feedback with AI scoring
+        res.status(200).json({
+            isCorrect: aiScore.isCorrect,
+            userAnswer: userAnswer.trim(),
+            correctAnswer,
+            quality: aiScore.quality, // AI-assigned quality
+            aiScore: {
+                quality: aiScore.quality,
+                reasoning: aiScore.reasoning,
+                confidence: aiScore.confidence,
+                aiScored: aiScore.aiScored
+            },
+            updatedFlashcard,
+            remaining: nextCards.length,
+            nextCard: nextCards.length > 0 ? nextCards[0] : null,
+            completed: nextCards.length === 0,
+            // Additional feedback
+            feedback: {
+                accuracy: updatedFlashcard.getAccuracy(),
+                totalReviews: updatedFlashcard.totalReviews,
+                correctAnswers: updatedFlashcard.correctAnswers
+            }
+        })
+    } catch (error) {
+        console.error('AI typed review error:', error)
+        res.status(400).json({ error: error.message })
+    }
+}
+
+// Allow manual quality override after seeing result
 const overrideQuality = async (req, res) => {
     try {
         const { id } = req.params
@@ -279,5 +361,6 @@ module.exports = {
     getNextReviewCard,
     reviewFlashcard,
     submitTypedReview,
+    submitTypedReviewWithAI,
     overrideQuality
 }

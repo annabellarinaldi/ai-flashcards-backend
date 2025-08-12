@@ -9,6 +9,7 @@ const {
     getNextReviewCard,
     reviewFlashcard,
     submitTypedReview,
+    submitTypedReviewWithAI,
     overrideQuality
 } = require('../controllers/flashcardController')
 const requireAuth = require('../middleware/requireAuth')
@@ -44,6 +45,9 @@ router.patch('/:id', updateFlashcard)
 
 // submit typed review
 router.post('/typed-review/:id', submitTypedReview)
+
+// submit typed review with AI scoring (new)
+router.post('/ai-typed-review/:id', submitTypedReviewWithAI)
 
 //override quality using typed review
 router.post('/override-quality/:id', overrideQuality)
