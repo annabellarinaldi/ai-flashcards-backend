@@ -1,7 +1,7 @@
 const express = require('express')
 
-//controller functions
-const {signupUser, loginUser} = require('../controllers/userController')
+//controller functions - ADD the missing functions here:
+const {signupUser, loginUser, verifyEmail, resendVerification} = require('../controllers/userController')
 
 const router = express.Router()
 
@@ -11,7 +11,7 @@ router.post('/login', loginUser)
 //signup route
 router.post('/signup', signupUser)
 
-// NEW: Email verification routes
+// Email verification routes
 router.get('/verify/:token', verifyEmail)
 router.post('/resend-verification', resendVerification)
 
