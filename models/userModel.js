@@ -1,6 +1,7 @@
 const mongoose = require('mongoose')
 const bcrypt = require('bcryptjs')
 const validator = require('validator')
+const crypto = require('crypto')
 
 const Schema = mongoose.Schema
 
@@ -23,7 +24,31 @@ const userSchema = new Schema({
     password: {
         type: String, 
         required: true
+    },
+    // Email verification fields
+    isEmailVerified: {
+        type: Boolean,
+        default: false
+    },
+    emailVerificationToken: {
+        type: String,
+        default: null
+    },
+    emailVerificationExpires: {
+        type: Date,
+        default: null
+    },
+    // Password reset fields (for future use)
+    passwordResetToken: {
+        type: String,
+        default: null
+    },
+    passwordResetExpires: {
+        type: Date,
+        default: null
     }
+}, {
+    timestamps: true
 })
 
 // Hash password before saving
@@ -42,6 +67,42 @@ userSchema.pre('save', async function(next) {
 // Compare password method
 userSchema.methods.comparePassword = async function(candidatePassword) {
     return await bcrypt.compare(candidatePassword, this.password)
+}
+
+// Generate email verification token
+userSchema.methods.generateEmailVerificationToken = function() {
+    // Generate random token
+    const token = crypto.randomBytes(32).toString('hex')
+    
+    // Set token and expiration (24 hours from now)
+    this.emailVerificationToken = token
+    this.emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+    
+    return token
+}
+
+// Generate password reset token
+userSchema.methods.generatePasswordResetToken = function() {
+    // Generate random token
+    const token = crypto.randomBytes(32).toString('hex')
+    
+    // Set token and expiration (1 hour from now)
+    this.passwordResetToken = token
+    this.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+    
+    return token
+}
+
+// Clear verification token
+userSchema.methods.clearEmailVerificationToken = function() {
+    this.emailVerificationToken = null
+    this.emailVerificationExpires = null
+}
+
+// Clear password reset token
+userSchema.methods.clearPasswordResetToken = function() {
+    this.passwordResetToken = null
+    this.passwordResetExpires = null
 }
 
 // Static signup method
@@ -67,7 +128,14 @@ userSchema.statics.signup = async function(username, email, password) {
         throw Error(`User with this ${field} already exists`)
     }
 
-    const user = await this.create({ username, email, password })
+    // Create user (password will be hashed by pre-save hook)
+    const user = await this.create({ 
+        username, 
+        email, 
+        password,
+        isEmailVerified: false // New users start unverified
+    })
+    
     return user
 }
 
@@ -88,6 +156,11 @@ userSchema.statics.login = async function(emailOrUsername, password) {
 
     if (!user) {
         throw Error('Invalid credentials')
+    }
+
+    // Check if email is verified
+    if (!user.isEmailVerified) {
+        throw Error('Please verify your email before logging in. Check your inbox for a verification link.')
     }
 
     const match = await user.comparePassword(password)
