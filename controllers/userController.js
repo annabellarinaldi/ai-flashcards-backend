@@ -87,9 +87,8 @@ const verifyEmail = async (req, res) => {
 
         if (!token) {
             console.log('❌ No token provided')
-            return res.status(400).json({
-                error: 'Verification token is required'
-            })
+            // Redirect to frontend with error
+            return res.redirect(`${process.env.FRONTEND_URL}/login?error=invalid_token`)
         }
 
         // Find user with this token that hasn't expired
@@ -100,9 +99,8 @@ const verifyEmail = async (req, res) => {
 
         if (!user) {
             console.log(`❌ Invalid or expired token: ${token}`)
-            return res.status(400).json({
-                error: 'Invalid or expired verification token'
-            })
+            // Redirect to frontend with error
+            return res.redirect(`${process.env.FRONTEND_URL}/login?error=expired_token`)
         }
 
         console.log(`✅ Token valid for user: ${user.email}`)
@@ -114,16 +112,13 @@ const verifyEmail = async (req, res) => {
 
         console.log(`🎉 Email verified successfully for: ${user.email}`)
 
-        res.status(200).json({
-            message: 'Email verified successfully! You can now log in.',
-            verified: true
-        })
+        // Redirect to login with success message
+        res.redirect(`${process.env.FRONTEND_URL}/login?verified=true`)
 
     } catch (error) {
         console.error('❌ Email verification error:', error)
-        res.status(500).json({
-            error: 'Server error during email verification'
-        })
+        // Redirect to frontend with error
+        res.redirect(`${process.env.FRONTEND_URL}/login?error=server_error`)
     }
 }
 
