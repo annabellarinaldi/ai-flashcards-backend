@@ -1,6 +1,7 @@
 const User = require('../models/userModel')
 const jwt = require('jsonwebtoken')
 const { sendEmail } = require('../services/emailService')
+const validator = require('validator')
 
 // Create token
 const createToken = (_id) => {
@@ -186,9 +187,147 @@ const resendVerification = async (req, res) => {
     }
 }
 
+// Add these functions to your userController.js
+
+// Forgot password - send reset email
+const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body
+        console.log(`🔑 Password reset requested for: ${email}`)
+
+        if (!email) {
+            return res.status(400).json({
+                error: 'Email is required'
+            })
+        }
+
+        // Find user with this email
+        const user = await User.findOne({
+            email: email.toLowerCase()
+        })
+
+        if (!user) {
+            console.log(`❌ No user found with email: ${email}`)
+            // Don't reveal if email exists for security
+            return res.status(200).json({
+                message: 'If an account with that email exists, we sent a password reset link.'
+            })
+        }
+
+        // Check if email is verified
+        if (!user.isEmailVerified) {
+            console.log(`❌ User email not verified: ${email}`)
+            return res.status(400).json({
+                error: 'Please verify your email address first before resetting password.'
+            })
+        }
+
+        // Generate password reset token
+        const resetToken = user.generatePasswordResetToken()
+        await user.save()
+        console.log(`🔐 Password reset token generated for: ${email}`)
+
+        // Create reset link
+        const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`
+        console.log(`🔗 Reset link: ${resetLink}`)
+
+        // Send password reset email
+        const emailResult = await sendEmail(
+            user.email,
+            'passwordReset',
+            {
+                username: user.username,
+                link: resetLink
+            }
+        )
+
+        if (emailResult.success) {
+            console.log(`✅ Password reset email sent to ${user.email}`)
+            res.status(200).json({
+                message: 'If an account with that email exists, we sent a password reset link.',
+                email: user.email
+            })
+        } else {
+            console.error(`❌ Password reset email failed: ${emailResult.error}`)
+            res.status(500).json({
+                error: 'Failed to send password reset email. Please try again.'
+            })
+        }
+
+    } catch (error) {
+        console.error('❌ Forgot password error:', error)
+        res.status(500).json({
+            error: 'Server error'
+        })
+    }
+}
+
+// Reset password with token
+const resetPassword = async (req, res) => {
+    try {
+        const { token } = req.params
+        const { password } = req.body
+        console.log(`🔄 Password reset attempt with token: ${token.substring(0, 8)}...`)
+
+        if (!token) {
+            return res.status(400).json({
+                error: 'Reset token is required'
+            })
+        }
+
+        if (!password) {
+            return res.status(400).json({
+                error: 'New password is required'
+            })
+        }
+
+        // Validate password strength
+        if (!validator.isStrongPassword(password)) {
+            return res.status(400).json({
+                error: 'Password must contain at least 8 characters, 1 uppercase, 1 lowercase, 1 number, and 1 special character'
+            })
+        }
+
+        // Find user with valid reset token
+        const user = await User.findOne({
+            passwordResetToken: token,
+            passwordResetExpires: { $gt: new Date() }
+        })
+
+        if (!user) {
+            console.log(`❌ Invalid or expired reset token: ${token}`)
+            return res.status(400).json({
+                error: 'Password reset token is invalid or has expired'
+            })
+        }
+
+        console.log(`✅ Valid reset token for user: ${user.email}`)
+
+        // Update password and clear reset token
+        user.password = password // This will be hashed by the pre-save hook
+        user.clearPasswordResetToken()
+        await user.save()
+
+        console.log(`🎉 Password reset successful for: ${user.email}`)
+
+        res.status(200).json({
+            message: 'Password reset successful! You can now log in with your new password.',
+            email: user.email
+        })
+
+    } catch (error) {
+        console.error('❌ Reset password error:', error)
+        res.status(500).json({
+            error: 'Server error'
+        })
+    }
+}
+
 module.exports = {
     loginUser, 
     signupUser, 
     verifyEmail, 
-    resendVerification
+    resendVerification,
+    forgotPassword,
+    resetPassword
 }
